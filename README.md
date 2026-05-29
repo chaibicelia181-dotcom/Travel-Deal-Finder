@@ -16,11 +16,11 @@ Unlike a simple chatbot that follows a fixed script, this project uses **agentic
 
 ## Tech Stack
 
-Web framework: Flask 
+Web framework: Flask |
 AI Agent: Groq API (llama-3.3-70b-versatile) |
-Agent pattern: Tool use, function calling loop 
-Frontend | HTML5, CSS3, JavaScript 
-Data simulation: Python (random seed for reproducible results) 
+Agent pattern: Tool use, function calling loop |
+Frontend | HTML5, CSS3, JavaScript |
+Data simulation: Python (random seed for reproducible results) |
 
 
 
