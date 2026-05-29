@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Travel Deal Finder</title>
+<link rel="stylesheet" href="static/style.css">
+</head>
+<body>
+
+<header>
+  <h1>Travel Deal Finder</h1>
+  <p>An AI agent that searches flights, hotels & pricing intelligence, then recommends the best deal</p>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <h2>Search for Deals</h2>
+    <form id="search-form">
+      <div class="form-grid">
+        <div class="full">
+          <label>Destination</label>
+          <input type="text" id="destination" placeholder="e.g. Barcelona, Paris, Rome, Lisbon…" required>
+        </div>
+        <div>
+          <label>Departure Date</label>
+          <input type="date" id="departure_date" value="{{ default_depart }}" required>
+        </div>
+        <div>
+          <label>Return Date</label>
+          <input type="date" id="return_date" value="{{ default_return }}" required>
+        </div>
+        <div class="full">
+          <label>Budget per person</label>
+          <input type="number" id="budget" placeholder="e.g. 600" min="100">
+        </div>
+      </div>
+      <button type="submit" id="submit-btn">Find Best Deals</button>
+    </form>
+  </div>
+
+  <div id="loading" class="card">
+    <div class="spinner"></div>
+    <p style="font-weight:600; margin-bottom:16px; color: var(--navy)">AI agent is working…</p>
+    <div class="steps">
+      <div class="step" id="step-1"><span class="dot"></span> Searching for available flights</div>
+      <div class="step" id="step-2"><span class="dot"></span> Searching for hotels</div>
+      <div class="step" id="step-3"><span class="dot"></span> Analysing price trends</div>
+      <div class="step" id="step-4"><span class="dot"></span> Getting destination tips</div>
+      <div class="step" id="step-5"><span class="dot"></span> Generating recommendation</div>
+    </div>
+  </div>
+
+  <div id="tool-log" class="card">
+    <h2>Agent Tool Calls</h2>
+    <div id="tool-tags"></div>
+    <p class="agent-note">The AI agent autonomously decided which tools to call and in what order — this is what makes it an agent rather than a simple chatbot.</p>
+  </div>
+
+  <div id="result" class="card">
+    <h2>AI Recommendation</h2>
+    <div id="result-content" class="result-content"></div>
+  </div>
+
+</div>
+
+<script>
+const form = document.getElementById('search-form');
+const loading = document.getElementById('loading');
+const toolLog = document.getElementById('tool-log');
+const result = document.getElementById('result');
+const resultContent = document.getElementById('result-content');
+const submitBtn = document.getElementById('submit-btn');
+
+const stepLabels = {
+  'search_flights':      'step-1',
+  'search_hotels':       'step-2',
+  'analyse_prices':      'step-3',
+  'get_destination_info':'step-4',
+};
+
+let stepTimer = null;
+let currentStep = 0;
+
+function animateSteps() {
+  const steps = ['step-1','step-2','step-3','step-4','step-5'];
+  currentStep = 0;
+  steps.forEach(s => {
+    const el = document.getElementById(s);
+    el.classList.remove('active','done');
+  });
+  stepTimer = setInterval(() => {
+    if (currentStep < steps.length) {
+      if (currentStep > 0) document.getElementById(steps[currentStep-1]).classList.replace('active','done');
+      document.getElementById(steps[currentStep]).classList.add('active');
+      currentStep++;
+    }
+  }, 1400);
+}
+
+function stopSteps() {
+  clearInterval(stepTimer);
+  ['step-1','step-2','step-3','step-4','step-5'].forEach(s => {
+    const el = document.getElementById(s);
+    if (el.classList.contains('active')) el.classList.replace('active','done');
+  });
+}
+
+// Format agent response: detect section headers and wrap them
+function formatResult(text) {
+  const sectionTitles = ['Best Flight', 'Best Hotel', 'Price Analysis', 'Destination Tips', 'Overall Recommendation'];
+  let html = text;
+
+  // Escape HTML first
+  html = html.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // Wrap section blocks
+  sectionTitles.forEach(title => {
+    const variants = [
+      `**${title}**`, `## ${title}`, `### ${title}`, `**${title}:**`
+    ];
+    variants.forEach(v => {
+      const escaped = v.replace(/\*/g,'\\*').replace(/##/g,'##');
+      html = html.replace(new RegExp(v.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'gi'),
+        `<div class="section-title">${title}</div>`);
+    });
+  });
+
+  // Bold
+  html = html.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  // Convert newlines
+  html = html.replace(/\n/g, '<br>');
+
+  return html;
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+
+  const destination = document.getElementById('destination').value.trim();
+  const departure_date = document.getElementById('departure_date').value;
+  const return_date = document.getElementById('return_date').value;
+  const budget = document.getElementById('budget').value;
+
+  // Reset UI
+  loading.style.display = 'block';
+  toolLog.style.display = 'none';
+  result.style.display = 'none';
+  resultContent.innerHTML = '';
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Searching…';
+  animateSteps();
+
+  try {
+    const res = await fetch('/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ destination, departure_date, return_date, budget }),
+    });
+
+    const data = await res.json();
+    stopSteps();
+    loading.style.display = 'none';
+
+    if (data.error) {
+      result.style.display = 'block';
+      resultContent.innerHTML = `<div class="error-box"> ${data.error}</div>`;
+    } else {
+      // Show tool calls
+      if (data.tool_calls && data.tool_calls.length > 0) {
+        toolLog.style.display = 'block';
+        const tagsDiv = document.getElementById('tool-tags');
+        tagsDiv.innerHTML = data.tool_calls
+          .map(t => `<span class="tool-tag">${t.tool.replace(/_/g,' ')}</span>`)
+          .join('');
+      }
+
+      // Show result
+      result.style.display = 'block';
+      resultContent.innerHTML = formatResult(data.answer);
+    }
+  } catch (err) {
+    stopSteps();
+    loading.style.display = 'none';
+    result.style.display = 'block';
+    resultContent.innerHTML = `<div class="error-box"> Network error: ${err.message}</div>`;
+  }
+
+  submitBtn.disabled = false;
+  submitBtn.textContent = 'Find Best Deals ';
+});
+</script>
+</body>
+</html>
