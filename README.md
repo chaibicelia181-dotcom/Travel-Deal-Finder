@@ -1,4 +1,4 @@
-# Travel Deal Finder — AI Agent
+# Travel Deal Finder AI Agent
 
 A Python Flask web application that uses **AI Agent architecture** (tool use / function calling) to autonomously search for travel deals, analyse prices, and recommend the best option.
 
